@@ -1,12 +1,35 @@
 /*
  * Date: April 29, 2021
  * Code written by Alick Campbell as a section of the Final Project given for ECSE3038 course on April 26, 2021.
+ * Open Licence ibrary code was used for the MPU6050.
+ * The Arduino Mega 2560 was used which facilitated the use of Timer5. 
 */
-
+#include <avr/interrupt.h>
+#include <SoftwareSerial.h>
+#include <util/delay.h>
 #include <Wire.h>
 #define TEMP_IN A7
+#define RX 10
+#define TX 11
 
-//Declaring some global variables
+SoftwareSerial ESP01 (RX,TX); // RX | TX
+// timer stuff
+volatile unsigned char seconds = 0;
+
+// esp-01 variables
+String ssid = "MonaConnect";
+String password = "";
+String host = "10.22.12.17";
+String PORT = "5000";
+String Command  = "";
+String post = "";
+String body = "";
+int countTrueCommand;
+int countTimeCommand; 
+int found = 0;
+
+
+// Gyro variables 
 int gyro_x, gyro_y, gyro_z;
 long gyro_x_cal, gyro_y_cal, gyro_z_cal;
 boolean set_gyro_angles;
@@ -18,28 +41,22 @@ float angle_pitch, angle_roll;
 int angle_pitch_buffer, angle_roll_buffer;
 float angle_pitch_output, angle_roll_output;
 
-long loop_timer;
+// LM35DT variable
 int temp;
 
-void setup() {
-  // setup LM35DT
-  pinMode(TEMP_IN, INPUT);
-  Wire.begin();                                                        //Start I2C as master
-  setup_mpu_6050_registers();                                          //Setup the registers of the MPU-6050 
-  for (int cal_int = 0; cal_int < 1000 ; cal_int ++){                  //Read the raw acc and gyro data from the MPU-6050 for 1000 times
-    read_mpu_6050_data();                                             
-    gyro_x_cal += gyro_x;                                              //Add the gyro x offset to the gyro_x_cal variable
-    gyro_y_cal += gyro_y;                                              //Add the gyro y offset to the gyro_y_cal variable
-    gyro_z_cal += gyro_z;                                              //Add the gyro z offset to the gyro_z_cal variable
-    delay(3);                                                          //Delay 3us to have 250Hz for-loop
-  }
+// state variables
+unsigned char wifiUp = 0; 
+long loop_timer;
 
-  // divide by 1000 to get avarage offset
-  gyro_x_cal /= 1000;                                                 
-  gyro_y_cal /= 1000;                                                 
-  gyro_z_cal /= 1000;                                                 
-  Serial.begin(115200);
-  loop_timer = micros();                                               //Reset the loop timer
+void setup() {
+  Serial.begin(9600);
+  timerSetUp10s();
+   
+  LM35DTSetup();
+  gyroSetup();
+   
+//  loop_timer = micros();                                               //Reset the loop timer
+  espSetup();
 }
 
 void loop(){
@@ -79,20 +96,17 @@ void loop(){
   //To dampen the pitch and roll angles a complementary filter is used
   angle_pitch_output = angle_pitch_output * 0.9 + angle_pitch * 0.1;   //Take 90% of the output pitch value and add 10% of the raw pitch value
   angle_roll_output = angle_roll_output * 0.9 + angle_roll * 0.1;      //Take 90% of the output roll value and add 10% of the raw roll value
- 
-  Serial.print(" | Angle  = "); Serial.println(angle_roll_output);
-  Serial.print(" | Temperature = "); Serial.println(myRound(getTemp()));
+
+//  Serial.print(" | Angle  = "); Serial.println(myRound(angle_pitch_output));
+//  Serial.print(" | Temperature = "); Serial.println(myRound(getTemp()));
    
- // delay(1000);
- while(micros() - loop_timer < 4000);                                 //Wait until the loop_timer reaches 4000us (250Hz) before starting the next loop
- loop_timer = micros();//Reset the loop timer
-  
+// while(micros() - loop_timer < 4000);                                 // wait until the loop_timer reaches 4000us (250Hz) before starting the next loop
+// loop_timer = micros();// Reset the loop timer
+ _delay_us(4000);
 }
 
-
-
-
-void setup_mpu_6050_registers(){
+void setup_mpu_6050_registers()
+{
   //Activate the MPU-6050
   Wire.beginTransmission(0x68);                                        //Start communicating with the MPU-6050
   Wire.write(0x6B);                                                    //Send the requested starting register
@@ -110,8 +124,8 @@ void setup_mpu_6050_registers(){
   Wire.endTransmission();                                             
 }
 
-
-void read_mpu_6050_data(){                                             //Subroutine for reading the raw gyro and accelerometer data
+void read_mpu_6050_data()
+{                                             // subroutine for reading the raw gyro and accelerometer data
   Wire.beginTransmission(0x68);                                        //Start communicating with the MPU-6050
   Wire.write(0x3B);                                                    //Send the requested starting register
   Wire.endTransmission();                                              //End the transmission
@@ -126,16 +140,189 @@ void read_mpu_6050_data(){                                             //Subrout
   gyro_z = Wire.read()<<8|Wire.read();                                 
 }
 
-
 int myRound (float temp)
 {
+  boolean neg;
+  if (temp < 0)
+  {
+     temp = abs(temp);
+     neg = true;
+  }
+  else
+  {
+    neg = false;
+  }
   float dp = temp - (int)temp;
-  if (dp >= 0.5) return (int)temp+1;
-  else return (int) temp;
+  if (dp >= 0.5) 
+  {
+    if (neg) return ((int)temp+1)*(-1);
+    else return (int)temp+1;
+  }
+  else 
+  {
+    if(neg) return ((int) temp)*(-1);
+    else return (int) temp;
+  }
 }
 
 float getTemp()
 {
   int ADCin = analogRead(TEMP_IN);
   return ((ADCin/1024.0)*5)/0.01;
+}
+
+void espSetup()
+{
+  ESP01.begin(9600);
+  sendCommand("AT",5,"OK"); // check if connection is okay
+  sendCommand("AT+CWMODE=1",5,"OK"); // set client mode
+  if(sendCommand("AT+CWJAP=\""+ ssid +"\",\""+ password +"\"",20,"OK")) wifiUp = 1;
+  else wifiUp = 0;
+
+}
+
+void gyroSetup()
+{
+    Wire.begin();                                                        //Start I2C as master
+  setup_mpu_6050_registers();                                          //Setup the registers of the MPU-6050 
+  for (int cal_int = 0; cal_int < 1000 ; cal_int ++){                  //Read the raw acc and gyro data from the MPU-6050 for 1000 times
+    read_mpu_6050_data();                                             
+    gyro_x_cal += gyro_x;                                              //Add the gyro x offset to the gyro_x_cal variable
+    gyro_y_cal += gyro_y;                                              //Add the gyro y offset to the gyro_y_cal variable
+    gyro_z_cal += gyro_z;                                              //Add the gyro z offset to the gyro_z_cal variable
+    delay(3);                                                          //Delay 3us to have 250Hz for-loop
+  }
+
+  // divide by 1000 to get avarage offset
+  gyro_x_cal /= 1000;                                                 
+  gyro_y_cal /= 1000;                                                 
+  gyro_z_cal /= 1000;   
+}
+
+void LM35DTSetup()
+{
+  // setup LM35DT
+  pinMode(TEMP_IN, INPUT);
+}
+
+void sendPost() 
+{
+    sendCommand("AT+CIPSTART=\"TCP\",\""+ host +"\"," + PORT,15,"OK");
+    body="";
+    body+= "{";
+    body += "\"patient_id\":"+getMacAddress()+",";
+    body+= "\"position\":"+ String(myRound(angle_pitch_output)) +",";
+    body+= "\"temperature\":"+String(myRound(getTemp()));
+    body+= "}";
+    post="";
+    post = "POST /tank HTTP/1.1\r\nHost: ";
+    post += host;
+    post += "\r\nContent-Type: application/json\r\nContent-Length:";
+    post += body.length();
+    post += "\r\n\r\n";
+    post += body;
+    post += "\r\n";
+    Command = "AT+CIPSEND=";
+    Command+= String(post.length());
+    sendCommand(Command, 10, "OK");
+    sendCommand(post, 15,"OK");
+    sendCommand("AT+CIPCLOSE=0", 1, "OK");
+}
+
+int sendCommand(String command, int maxTime, char readReply[]) 
+{
+  Serial.flush();
+  Serial.print(countTrueCommand);
+  // program gets stuck here after it is eligible to send data
+  Serial.print(". at command => ");
+  Serial.print(command);
+  Serial.print(" ");
+  found = 0;
+  while(countTimeCommand < (maxTime*1))
+  {
+    ESP01.println(command); 
+    if(ESP01.find(readReply))//ok
+    {
+      found = 1;
+      break;
+    }
+  
+    countTimeCommand++;
+  }
+  
+  if(found == 1)
+  {
+    Serial.println("OK");
+    countTrueCommand++;
+    countTimeCommand = 0;
+  }
+  
+  if(found == 0)
+  {
+    Serial.println("Fail");
+    countTrueCommand = 0;
+    countTimeCommand = 0;
+  }
+  
+
+  return found;
+ }
+
+String getMacAddress()
+ {
+    ESP01.println("AT+CIPSTAMAC?");
+    int sizee =  ESP01.available();
+    char response1[sizee];
+    String response = "";
+    String mac = "";
+    for (int x = 0; x <sizee; x++)
+    {
+      response1[x] = ESP01.read();
+      response+= response1[x];
+    }
+    
+    int x = response.indexOf('"');
+    int from = x+1;
+    
+    for(int i = x+1; i < (response.indexOf('"', from)); i++)
+    {
+    mac += response1[i];
+    }
+    return mac;
+ }
+
+ void timerSetUp10s()
+ {
+
+ TCNT5 = 0; // reset counter
+ TIMSK5 = 0x01; // TOIE5
+ sei(); // status register I bit
+ TCCR5A = 0;
+ TCCR5C = 0; // apparently I need to set these to zero
+ TCCR5B = 0b00000100; // /256 to give ~1 sec interrupts
+  
+ }
+
+
+ISR (TIMER5_OVF_vect)
+{
+  Serial.flush();
+  TCCR5B = 0;
+  TCNT5 = 0;
+  seconds++;
+  if(seconds == 10)
+  {
+    seconds = 0; 
+    // send post requests every 10s
+    if(wifiUp == 1)
+    {
+      Serial.println("I can send data");
+//      sendPost();
+//  Serial.print(" | Angle  = "); Serial.println(myRound(angle_pitch_output));
+//  Serial.print(" | Temperature = "); Serial.println(myRound(getTemp()));
+sendCommand("AT+CIPSTART=\"TCP\",\""+ host +"\"," + PORT,15,"OK");
+    }
+    
+  }
+TCCR5B = 0b00000100; // /256 to give ~1 sec interrupts
 }
