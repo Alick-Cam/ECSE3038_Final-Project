@@ -20,6 +20,7 @@ SoftwareSerial ESP01 (RX,TX); // RX | TX
 String ssid = "MonaConnect";
 String password = "";
 String host = "10.22.12.17";
+String mac = "";
 String PORT = "5000";
 String Command  = "";
 String post = "";
@@ -59,6 +60,9 @@ void setup() {
    
 //  loop_timer = micros();                                               //Reset the loop timer
   espSetup();
+  // get mac address
+  for(int i = 0; i < 4; i++)
+  mac = getMacAddress();
 }
 
 void loop(){
@@ -219,7 +223,7 @@ void sendPost()
     sendCommand("AT+CIPSTART=\"TCP\",\""+ host +"\"," + PORT,15,"OK");
     body="";
     body+= "{";
-    body += "\"patient_id\":"+getMacAddress()+",";
+    body += "\"patient_id\":"+mac+",";
     body+= "\"position\":"+ String(myRound(angle_pitch_output)) +",";
     body+= "\"temperature\":"+String(myRound(getTemp()));
     body+= "}";
@@ -279,6 +283,7 @@ int sendCommand(String command, int maxTime, char readReply[])
 
 String getMacAddress()
  {
+    
     ESP01.println("AT+CIPSTAMAC?");
     int sizee =  ESP01.available();
     char response1[sizee];
@@ -293,9 +298,10 @@ String getMacAddress()
     int x = response.indexOf('"');
     int from = x+1;
     
-    for(int i = x+1; i < (response.indexOf('"', from)); i++)
+    for(int i = x; i < (response.indexOf('"', from))+1; i++)
     {
     mac += response1[i];
     }
+    delay(400);
     return mac;
  }
