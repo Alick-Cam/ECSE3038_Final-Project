@@ -2,19 +2,19 @@
  * Date: April 29, 2021
  * Code written by Alick Campbell as a section of the Final Project given for ECSE3038 course on April 26, 2021.
  * Open Licence ibrary code was used for the MPU6050.
- * The Arduino Mega 2560 was used which facilitated the use of Timer5. 
 */
-#include <avr/interrupt.h>
+
 #include <SoftwareSerial.h>
 #include <util/delay.h>
 #include <Wire.h>
+#define timeout 10000
 #define TEMP_IN A7
 #define RX 10
 #define TX 11
 
 SoftwareSerial ESP01 (RX,TX); // RX | TX
-// timer stuff
-volatile unsigned char seconds = 0;
+
+
 
 // esp-01 variables
 String ssid = "MonaConnect";
@@ -28,6 +28,9 @@ int countTrueCommand;
 int countTimeCommand; 
 int found = 0;
 
+// time stuff
+unsigned long start_time = 0;
+long loop_timer;
 
 // Gyro variables 
 int gyro_x, gyro_y, gyro_z;
@@ -46,11 +49,10 @@ int temp;
 
 // state variables
 unsigned char wifiUp = 0; 
-long loop_timer;
+
 
 void setup() {
   Serial.begin(9600);
-  timerSetUp10s();
    
   LM35DTSetup();
   gyroSetup();
@@ -60,7 +62,9 @@ void setup() {
 }
 
 void loop(){
-
+  start_time = millis();
+  while ((millis() - start_time) < timeout)
+  {
   read_mpu_6050_data();   
  //Subtract the offset values from the raw gyro values
   gyro_x -= gyro_x_cal;                                                
@@ -103,6 +107,11 @@ void loop(){
 // while(micros() - loop_timer < 4000);                                 // wait until the loop_timer reaches 4000us (250Hz) before starting the next loop
 // loop_timer = micros();// Reset the loop timer
  _delay_us(4000);
+  }
+  // sendPost
+  // checking delay
+  Serial.print("This is the delay you got - ");Serial.print((millis() - start_time)/1000.0); Serial.println(" secs");
+  sendPost();
 }
 
 void setup_mpu_6050_registers()
@@ -226,7 +235,7 @@ void sendPost()
     Command+= String(post.length());
     sendCommand(Command, 10, "OK");
     sendCommand(post, 15,"OK");
-    sendCommand("AT+CIPCLOSE=0", 1, "OK");
+    sendCommand("AT+CIPCLOSE=0", 10, "OK");
 }
 
 int sendCommand(String command, int maxTime, char readReply[]) 
@@ -290,39 +299,3 @@ String getMacAddress()
     }
     return mac;
  }
-
- void timerSetUp10s()
- {
-
- TCNT5 = 0; // reset counter
- TIMSK5 = 0x01; // TOIE5
- sei(); // status register I bit
- TCCR5A = 0;
- TCCR5C = 0; // apparently I need to set these to zero
- TCCR5B = 0b00000100; // /256 to give ~1 sec interrupts
-  
- }
-
-
-ISR (TIMER5_OVF_vect)
-{
-  Serial.flush();
-  TCCR5B = 0;
-  TCNT5 = 0;
-  seconds++;
-  if(seconds == 10)
-  {
-    seconds = 0; 
-    // send post requests every 10s
-    if(wifiUp == 1)
-    {
-      Serial.println("I can send data");
-//      sendPost();
-//  Serial.print(" | Angle  = "); Serial.println(myRound(angle_pitch_output));
-//  Serial.print(" | Temperature = "); Serial.println(myRound(getTemp()));
-sendCommand("AT+CIPSTART=\"TCP\",\""+ host +"\"," + PORT,15,"OK");
-    }
-    
-  }
-TCCR5B = 0b00000100; // /256 to give ~1 sec interrupts
-}
