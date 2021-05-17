@@ -4,22 +4,22 @@
  * Open Licence ibrary code was used for the MPU6050.
 */
 
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 #include <util/delay.h>
 #include <Wire.h>
 #define timeout 10000
 #define TEMP_IN A7
-#define RX 10
-#define TX 11
-
-SoftwareSerial ESP01 (RX,TX); // RX | TX
+//#define RX 10
+//#define TX 11
+//
+//SoftwareSerial Serial3 (RX,TX); // RX | TX
 
 
 
 // esp-01 variables
 String ssid = "MonaConnect";
 String password = "";
-String host = "10.22.12.17";
+String host = "10.22.8.35";
 String mac = "";
 String PORT = "5000";
 String Command  = "";
@@ -53,7 +53,7 @@ unsigned char wifiUp = 0;
 
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
    
   LM35DTSetup();
   gyroSetup();
@@ -186,7 +186,7 @@ float getTemp()
 
 void espSetup()
 {
-  ESP01.begin(9600);
+  Serial3.begin(115200);
   sendCommand("AT",5,"OK"); // check if connection is okay
   sendCommand("AT+CWMODE=1",5,"OK"); // set client mode
   if(sendCommand("AT+CWJAP=\""+ ssid +"\",\""+ password +"\"",20,"OK")) wifiUp = 1;
@@ -228,7 +228,7 @@ void sendPost()
     body+= "\"temperature\":"+String(myRound(getTemp()));
     body+= "}";
     post="";
-    post = "POST /tank HTTP/1.1\r\nHost: ";
+    post = "POST /new_patient HTTP/1.1\r\nHost: ";
     post += host;
     post += "\r\nContent-Type: application/json\r\nContent-Length:";
     post += body.length();
@@ -253,8 +253,8 @@ int sendCommand(String command, int maxTime, char readReply[])
   found = 0;
   while(countTimeCommand < (maxTime*1))
   {
-    ESP01.println(command); 
-    if(ESP01.find(readReply))//ok
+    Serial3.println(command); 
+    if(Serial3.find(readReply))//ok
     {
       found = 1;
       break;
@@ -284,14 +284,14 @@ int sendCommand(String command, int maxTime, char readReply[])
 String getMacAddress()
  {
     
-    ESP01.println("AT+CIPSTAMAC?");
-    int sizee =  ESP01.available();
+    Serial3.println("AT+CIPSTAMAC?");
+    int sizee =  Serial3.available();
     char response1[sizee];
     String response = "";
     String mac = "";
     for (int x = 0; x <sizee; x++)
     {
-      response1[x] = ESP01.read();
+      response1[x] = Serial3.read();
       response+= response1[x];
     }
     
