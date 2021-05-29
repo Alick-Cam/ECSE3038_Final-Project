@@ -19,7 +19,7 @@
 // esp-01 variables
 String ssid = "MonaConnect";
 String password = "";
-String host = "10.22.8.42";
+String host = "10.22.8.50";
 String mac = "";
 String PORT = "3000";
 String Command  = "";

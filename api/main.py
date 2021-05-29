@@ -61,20 +61,18 @@ def new_record():
         return ve.messages, 400 # Bad Request hence data was not saved to the database
     except Exception as e:   
         return {"msg" : "Can't insert_one to record collection"},500 # data was not saved to the database because of some internal server error
-
-@app.route("/api/record")
-def get_records():
-    allobjects = mongo.db.record.find()
-    jsonobject = jsonify(loads(dumps(allobjects))) # convert python list to json(Response instance in python) ("<class 'flask.wrappers.Response'>")
-    print(type(allobjects))
-    print(allobjects)
-    print(type(dumps(allobjects)))
-    print(dumps(allobjects))
-    print(type(loads(dumps(allobjects))))
-    print(loads(dumps(allobjects)))
-    print(type(jsonobject))
-    print(jsonobject)
-    return jsonobject
+# {"patient_id":id, "temperature": 40}
+@app.route("/api/record/<id>")
+def get_records(id):
+    x = datetime.datetime.now()
+    currentTimeString = x.strftime("%m"+"/"+"%d"+"/"+"%Y"+"-"+"%H"+":"+"%M"+":"+"%S")
+    y = x - datetime.timedelta(minutes=30)
+    pastTimeString = y.strftime("%m"+"/"+"%d"+"/"+"%Y"+"-"+"%H"+":"+"%M"+":"+"%S")
+    dbList = []
+    for document in mongo.db.record.find({"patient_id":id,"last_updated" : {"$gte" : pastTimeString , "$lte" : currentTimeString}}):
+        dbList.append(document)
+    print(dbList)
+    return jsonify(loads(dumps(dbList)))
 
 # Frontend requests 
 @app.route("/api/patient")

@@ -1,8 +1,9 @@
 var macAd
-const ip = "10.22.8.42"
+const ip = "10.22.8.50"
 const port = "3000"
 var xValues = []; /*50,60,70,80,90,100,110,120,130,140,150*/
 var yValues = []; /*7,8,8,9,9,9,10,11,14,14,15*/
+var gotPrev = false
 window.onload = function () {
     let mac= sessionStorage.getItem("patient_id")
     console.log(mac)
@@ -11,11 +12,9 @@ window.onload = function () {
 macAd = onload()
 document.getElementById("back-to-cards").addEventListener("click" , goBack)
 
-function goBack(e)  {
-    let url = "http://127.0.0.1:5500/client/grid.html"
-    location.href=url;
-}
-getReq()
+
+getPatientReq()
+getRecordReq()
 // make connection 
 var socket = io('http://'+ip+":" + port);
 socket.on('connect', function() {
@@ -25,21 +24,28 @@ socket.on('connect', function() {
 socket.on('message', function(message) {
 
   if (message["patient_id"] == macAd) {
+    if (gotPrev == true){
       console.log(message)
       document.getElementById("temp-data").innerHTML = message["temperature"].toString()+"°C"
       document.getElementById("pos-data").innerHTML = message["position"].toString()+"°"
-      if(xValues.length == 180) {
-        xValues =[]
-        yValues = []
-      }
       let time = message["last_updated"].split("-")
       xValues.push(time[1])
       yValues.push(message["temperature"])
+      if (xValues.length >= 180) { // since 180 is the most that can occur in the past half hour given 10sec delay
+        xValues.reverse()
+        xValues.pop()
+        xValues.reverse()
+        yValues.reverse()
+        yValues.pop()
+        yValues.reverse()
+      }
       plotData();
+    }
+
   }
 });
 
-function getReq () {
+function getPatientReq () {
     // GET request
 
     let url = "http://"+ip+":"+port+"/api/patient/"+macAd
@@ -59,11 +65,26 @@ function getReq () {
     })
 }
 
-// var myChart = new Chart("myChart", {
-//     type: "line",
-//     data: {},
-//     options: {}
-//   });
+function getRecordReq() {
+  let url = "http://"+ip+":"+port+"/api/record/"+macAd
+  console.log(url) 
+  fetch (url)
+  .then((res) => res.json())
+  .then((json) => {
+      console.log(json)
+      for (let i = 0; i<json.length ; i++) {
+        yValues[i] = json[i]["temperature"]
+        xValues[i] = json[i]["last_updated"].split("-")[1]
+      }
+      plotData()
+      gotPrev = true
+      
+
+  })
+  .catch((error) => {
+      console.error(error)
+  })  
+}
 
 
 function plotData() {
@@ -87,4 +108,9 @@ new Chart("myChart", {
     }
   }
 });
+}
+
+function goBack(e)  {
+  let url = "http://127.0.0.1:5501/client/grid.html"
+  location.href=url;
 }

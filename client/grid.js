@@ -1,6 +1,6 @@
 console.log("I'm linked bro")
 
-const ip = "10.22.8.42"
+const ip = "10.22.8.50"
 const port = "3000"
 var editcount = 0;
 var createPCCount = 0;
@@ -274,7 +274,7 @@ function nextPage(e) {
         console.log(document.getElementById(cardid).childNodes[0].innerHTML)
         let mac = document.getElementById(cardid).childNodes[0].innerHTML
         sessionStorage.setItem("patient_id", mac)
-        let url = "http://127.0.0.1:5500/client/graph.html"
+        let url = "http://127.0.0.1:5501/client/graph.html"
         location.href=url;
     }
 
