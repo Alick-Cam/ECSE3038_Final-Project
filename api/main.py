@@ -3,12 +3,19 @@ from flask_pymongo import PyMongo
 from marshmallow import Schema, fields, ValidationError
 from bson.json_util import dumps
 from json import loads
+import datetime
+from flask_socketio import SocketIO
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.config["MONGO_URI"]='mongodb+srv://backendDev:backendDev@cluster0.dp4qj.mongodb.net/ECSE3038_Final-Project?ssl=true&ssl_cert_reqs=CERT_NONE'
-# app.config["MONGO_URI"] = 'mongodb+srv://backendDev:backendDev@cluster0.dp4qj.mongodb.net/Iot_Patients?ssl=true&ssl_cert_reqs=CERT_NONE'
-
+CORS(app)
 mongo = PyMongo(app)
+# socketConnect = False
+# socket stuff
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, cors_allowed_origins="*")
+# socketio = SocketIO(app, cors_allowed_origins="http://127.0.0.1:5501")
 
 class RecordValidation(Schema):
     patient_id = fields.String(required = True)
@@ -18,26 +25,56 @@ class RecordValidation(Schema):
 class PatientValidation(Schema):
     fname = fields.String(required = True)
     lname = fields.String(required = True)
+    age = fields.Integer(required = True, strict = True)
     patient_id = fields.String(requred = True)
+
+# "route" that gets the connection message
+@socketio.on('frontendconnect')
+def handle_my_custom_event(json):
+    print('notification: ' + str(json))
 
 @app.route("/api/record", methods = ["POST"])
 def new_record():
+    # received by the backend
+    x = datetime.datetime.now()
+    timeString = x.strftime("%m"+"/"+"%d"+"/"+"%Y"+"-"+"%H"+":"+"%M"+":"+"%S")
     req = request.json 
-    print(req)
+    # print(req)
     # Just incase the request has additional unwanted records
     database = {
         "patient_id" : req["patient_id"],
         "position" : req["position"],
         "temperature":req["temperature"]
     }
+    
     try:
         recordTemp = RecordValidation().load(database) # only fails when it gets bad data (violates schema)
-        mongo.db.record.insert_one(recordTemp) # fails when db isnt connected and such
+        recordTemp["last_updated"] = timeString
+        mongo.db.record.insert_one(recordTemp) # fails when db isn't connected
+        # saved in the database
+        # now pull record with the id that called this view function (use timestamp too)
+        mostrecentrecord = mongo.db.record.find_one({"last_updated":recordTemp["last_updated"]})
+        jsonobject = loads(dumps(mostrecentrecord))
+        socketio.emit('message', jsonobject)
         return {"success":True, "msg":"Data saved in database successfully"}
     except ValidationError as ve:
         return ve.messages, 400 # Bad Request hence data was not saved to the database
-    except Exception as e:
-        return e.messages, 500 # data was not saved to the database because of some internal server error
+    except Exception as e:   
+        return {"msg" : "Can't insert_one to record collection"},500 # data was not saved to the database because of some internal server error
+
+@app.route("/api/record")
+def get_records():
+    allobjects = mongo.db.record.find()
+    jsonobject = jsonify(loads(dumps(allobjects))) # convert python list to json(Response instance in python) ("<class 'flask.wrappers.Response'>")
+    print(type(allobjects))
+    print(allobjects)
+    print(type(dumps(allobjects)))
+    print(dumps(allobjects))
+    print(type(loads(dumps(allobjects))))
+    print(loads(dumps(allobjects)))
+    print(type(jsonobject))
+    print(jsonobject)
+    return jsonobject
 
 # Frontend requests 
 @app.route("/api/patient")
@@ -54,6 +91,7 @@ def add_patient():
     database = {
         "fname" : req["fname"],
         "lname" : req["lname"],
+        "age" : req["age"],
         "patient_id":req["patient_id"]
     }  
     try:
@@ -63,7 +101,7 @@ def add_patient():
     except ValidationError as ve:
         return ve.messages, 400 # Bad Request hence data was not saved to the database
     except Exception as e:
-        return e.messages, 500 # data was not saved to the database because of some internal server error
+        return {"msg" : "Can't insert_one to patient collection"}, 500 # data was not saved to the database because of some internal server error
 
 @app.route('/api/patient/<id>', methods = ["GET", "PATCH", "DELETE"])
 def get_a_patient(id):
@@ -79,20 +117,23 @@ def get_a_patient(id):
         if "lname" in req:
             jsonobject["lname"] = req["lname"]
             mongo.db.patient.update_one({"patient_id":id}, {"$set":{"lname": jsonobject["lname"]}})
+        if "age" in req:
+            jsonobject["age"] = req["age"]
+            mongo.db.patient.update_one({"patient_id":id}, {"$set":{"age": jsonobject["age"]}})
         if "patient_id" in req:
             jsonobject["patient_id"] = req["patient_id"]
             mongo.db.patient.update_one({"patient_id":id}, {"$set":{"patient_id":jsonobject["patient_id"]}})
+        # at this point in the program, the id would have updated if an id update was sent
+        # so use the jsonobject["patient_id"] to search for the document
         anobject = mongo.db.patient.find_one({"patient_id":jsonobject["patient_id"]})
         jsonobject = loads(dumps(anobject))
         return jsonobject
     elif request.method == "DELETE":
-        mongo.db.patient.delete_one({"patient_id":id})
-        
-
-    
-        
-
-
+        deleteinstance = mongo.db.patient.delete_one({"patient_id":id})
+        if deleteinstance.deleted_count == 1:
+            return {"success": True}
+        else:
+            return {"success": False}, 400
 
 if __name__ == "__main__":
-    app.run(debug = True, host="0.0.0.0") 
+    socketio.run(app,debug = True, host="0.0.0.0", port = 3000)

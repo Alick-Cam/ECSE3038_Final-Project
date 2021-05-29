@@ -19,9 +19,9 @@
 // esp-01 variables
 String ssid = "MonaConnect";
 String password = "";
-String host = "10.22.8.35";
+String host = "10.22.8.42";
 String mac = "";
-String PORT = "5000";
+String PORT = "3000";
 String Command  = "";
 String post = "";
 String body = "";
@@ -62,7 +62,8 @@ void setup() {
   espSetup();
   // get mac address
   for(int i = 0; i < 4; i++)
-  mac = getMacAddress();
+  mac = getMacAddress();   
+
 }
 
 void loop(){
@@ -228,7 +229,7 @@ void sendPost()
     body+= "\"temperature\":"+String(myRound(getTemp()));
     body+= "}";
     post="";
-    post = "POST /new_patient HTTP/1.1\r\nHost: ";
+    post = "POST /api/record HTTP/1.1\r\nHost: ";
     post += host;
     post += "\r\nContent-Type: application/json\r\nContent-Length:";
     post += body.length();
