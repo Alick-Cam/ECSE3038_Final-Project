@@ -1,0 +1,21 @@
+<div class="patient-cards">
+    <div class = "patient-id">AA:BB:CC:DD</div>
+    <div class = "patient-name">John Doe</div>
+    <div class = "patient-data-wrap">
+        <div class = "patient-data">
+            <div>Temp:</div>
+            <div>32°C</div>
+        </div>
+        <div class = "patient-data">
+            <div>Position:</div>
+            <div>0°</div>
+        </div>
+        <div class = "patient-data">
+            <div>Age:</div>
+            <div>22</div>
+        </div>
+    </div>
+    <div class = "patient-edits">
+        <button>Edit</button><button>Delete</button>
+    </div>
+</div>

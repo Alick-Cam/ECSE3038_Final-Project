@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel = "stylesheet" href = "styles.css">
+    
+    <title>Patient Graph</title>
+</head>
+<body>
+    <header>
+        <div id = "fname"></div>
+        <div id = "lname"></div>
+    </header>
+    <div id =  "static-data">
+        <div id = "position">
+            <div>POS</div>
+            <div id = "pos-data">0°</div>
+        </div>
+        <div id = "temperature">
+            <div>TEMP</div> 
+            <div id = "temp-data">32°C</div>
+        </div>
+    </div>
+    <div id = "dynamic-data">
+        <canvas id="myChart" ></canvas>
+    </div>
+    <footer>
+        <img id = "back-to-cards" src="/client/assets/backbutton.png" alt="">
+        <div id = "mac-address">BB:BB:BB:BB</div>
+    </footer>
+    <script src="https://cdn.socket.io/4.1.1/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script>
+    <script type="text/javascript" src = "graph.js"></script>
+</body>
+</html> 
